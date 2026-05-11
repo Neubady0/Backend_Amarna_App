@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-multipart
+google-generativeai
+pypdf
+pydantic
+python-dotenv
+pillow
+python-doctr[tf]
+tf-keras
