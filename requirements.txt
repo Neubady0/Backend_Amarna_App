@@ -1,2 +1,8 @@
+<<<<<<< HEAD
 Flask==3.0.0
 flask-cors==4.0.0
+=======
+flask
+flask-cors
+faster-whisper
+>>>>>>> f901163e4c96ecef829a4c6176e2369a97b955ea
