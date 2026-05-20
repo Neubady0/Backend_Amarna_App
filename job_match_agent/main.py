@@ -1,3 +1,6 @@
+import os
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+
 from PIL import Image
 import numpy as np
 import os
