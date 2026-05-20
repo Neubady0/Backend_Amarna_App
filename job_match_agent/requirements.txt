@@ -1,10 +1,13 @@
 fastapi
 uvicorn
 python-multipart
-google-generativeai
+google-genai
 pypdf
 pydantic
 python-dotenv
 pillow
 python-doctr[tf]
 tf-keras
+requests
+faiss-cpu
+numpy
