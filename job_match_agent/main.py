@@ -1,5 +1,6 @@
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+os.environ['OMP_NUM_THREADS'] = '1'
 
 from PIL import Image
 import numpy as np
