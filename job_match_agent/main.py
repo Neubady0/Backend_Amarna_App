@@ -10,6 +10,7 @@ import io
 import math
 import re
 import logging
+import time
 import requests
 import traceback
 from pathlib import Path
@@ -133,13 +134,35 @@ def extraer_readme_github(url: str) -> str:
         pass
     return f"Enlace aportado: {url}"
 
+MODELOS_FLASH = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite"]
+
+def generar_con_retry(contents, config, modelos=None, max_intentos=3):
+    """Intenta generar contenido con retry y fallback de modelos ante 503/429."""
+    if modelos is None:
+        modelos = MODELOS_FLASH
+    ultimo_error = None
+    for modelo in modelos:
+        for intento in range(max_intentos):
+            try:
+                return client.models.generate_content(model=modelo, contents=contents, config=config)
+            except Exception as e:
+                ultimo_error = e
+                err_str = str(e)
+                if "503" in err_str or "UNAVAILABLE" in err_str or "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    espera = 2 ** intento  # 1s, 2s, 4s
+                    logging.warning(f"Modelo {modelo} intento {intento+1} falló ({err_str[:80]}). Reintentando en {espera}s...")
+                    time.sleep(espera)
+                else:
+                    break  # Error no transitorio, probar siguiente modelo
+    raise ultimo_error
+
 def investigar_reputacion_empresa(empresa: str, puesto: str) -> str:
     if empresa.lower() in ["general", "empresa local", "empresa real"]:
         return "Cultura orientada a resultados con metodologias agiles estandar."
     prompt = f"Busca opiniones en foros IT o Glassdoor sobre trabajar en '{empresa}' en España como '{puesto}'. Resume su ambiente laboral y metodologias."
     try:
         res = client.models.generate_content(
-            model="gemini-2.5-pro",
+            model="gemini-2.5-flash",
             contents=prompt,
             config=types.GenerateContentConfig(tools=[types.Tool(google_search=types.GoogleSearch())], temperature=0.2)
         )
@@ -179,8 +202,7 @@ async def analizar_cv_endpoint(
     else:
         prompt_extraccion = f"Analiza este texto extraído de un currículum y conviértelo a JSON estrictamente. Presta especial atención a extraer el código postal de 5 dígitos (ej. 08030). CV: {texto_cv[:2000]}"
         try:
-            res_cv_json = client.models.generate_content(
-                model="gemini-2.5-flash",
+            res_cv_json = generar_con_retry(
                 contents=prompt_extraccion,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json", 
@@ -242,8 +264,7 @@ async def analizar_cv_endpoint(
     prompt_maestro = f"Eres el motor de Inteligencia Artificial de Amarna. Diseña la respuesta de evaluacion de elite. DATOS LOGISTICOS DEL CANDIDATO: Origen de la ubicación: {origen_ubicacion}. PERFIL TECNICO: {perfil_unificado}. VACANTES SELECCIONADAS: {json.dumps(contexto_enriquecido, ensure_ascii=False)}. INSTRUCCIONES DE REDACCION PARA CUMPLIR EL ESQUEMA RespuestaEliteAmarna: 1. 'tiempo_trayecto_estimado': Redacta una estimacion de desplazamiento nombrando de forma explícita el barrio de residencia del candidato y el barrio de la vacante. 2. 'investigacion_corporativa': Extrae las metodologias reales del campo 'investigacion_foros_cultura'. 3. 'carta_presentacion_infiltrada': Redacta una carta de presentacion organica y persuasiva para la oferta 1. 4. 'roadmap_cierra_gaps': Incluye enlaces oficiales de aprendizaje y tiempos de dedicacion para suplir carencias."
 
     try:
-        res_json = client.models.generate_content(
-            model="gemini-2.5-flash",
+        res_json = generar_con_retry(
             contents=prompt_maestro,
             config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=RespuestaEliteAmarna, temperature=0.2)
         )

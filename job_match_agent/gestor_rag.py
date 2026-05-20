@@ -20,7 +20,7 @@ class ElementoRAG(BaseModel):
 class BaseDatosVectorialAmarna:
     def __init__(self, api_key: str, index_file="amarna_memoria.index", data_file="amarna_datos.json"):
         self.client = genai.Client(api_key=api_key)
-        self.dimension = 768
+        self.dimension = 3072
         self.index_file = index_file
         self.data_file = data_file
         self.elementos: List[ElementoRAG] = []

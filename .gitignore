@@ -20,3 +20,8 @@ error_log.txt
 # Mac hidden files
 .DS_Store
 ._*
+
+# Databases and Local State
+*.db
+job_match_agent/amarna_datos.json
+job_match_agent/amarna_memoria.index

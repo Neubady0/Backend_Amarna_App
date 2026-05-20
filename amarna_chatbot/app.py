@@ -11,14 +11,15 @@ CORS(app)
 
 # --- CONFIGURACIÓN GLOBAL ---
 LLAVE = os.environ.get("GEMINI_API_KEY", "AIzaSyBijeCToGUgK6y8M9znLL6TDJQo6zrGMyw")
-MODELO_ACTIVO = "models/gemini-2.5-flash"
+MODELO_ACTIVO = "models/gemini-2.5-flash-lite"
 client = genai.Client(api_key=LLAVE)
 
 ESTRUCTURA_ENTREVISTA = """
-Tu nombre es ChatAmarna. Debes dirigir la entrevista en este orden:
+Tu nombre es Amarna. Debes dirigir la entrevista en este orden:
 1. BLOQUE PERSONAL | 2. BLOQUE PROYECTO | 3. BLOQUE EMPRESA | 4. BLOQUE TRAMPA.
 Regla de Oro: Evalúa si es momento de avanzar de bloque tras cada respuesta.
-Si es el inicio, lanza la primera pregunta del Bloque Personal directamente.
+Si es el inicio, lanza la primera pregunta del Bloque Personal directamente sin saludos largos ni rodeos vacíos.
+IMPORTANTE: Escribe siempre en lenguaje natural y fluido. NUNCA uses formato markdown ni asteriscos (como **negrita**) ni corchetes crudos en tus respuestas al usuario.
 """
 
 PERSONALIDADES = {
@@ -107,11 +108,25 @@ def chat():
     modo = data.get('modo', 'amable').lower()
     datos_cv = data.get('cv_data', 'No hay CV cargado')
     file_uri = data.get('file_uri') # Recibe el URI del archivo RAG
+    job_title = data.get('job_title')
+    job_company = data.get('job_company')
+    job_context = data.get('job_context')
 
     try:
         history_db, summary = get_session_data(user_id)
         instruccion = PERSONALIDADES.get(modo, PERSONALIDADES["amable"])
-        sys_prompt = f"{instruccion}\nRESUMEN PREVIO: {summary}\nDATOS CV: {datos_cv}"
+        
+        job_info = ""
+        if job_title:
+            job_info = f"\n\n--- MODO ENTREVISTA ESPECÍFICA PARA PUESTO DE TRABAJO ---"
+            job_info += f"\nPuesto: {job_title}"
+            if job_company:
+                job_info += f"\nEmpresa: {job_company}"
+            if job_context:
+                job_info += f"\nContexto y Detalles de la Oferta:\n{job_context}"
+            job_info += "\n\nINSTRUCCIÓN DE ROL CLAVE: Actúa como el entrevistador o manager de contratación para esta oferta de trabajo específica. Debes adaptar tus preguntas de los 4 bloques (Personal, Proyecto, Empresa, Trampa) específicamente a los requisitos de este puesto, a la empresa señalada y a cómo el CV del candidato encaja en ella. Utiliza los 'gaps' y la justificación provista en el contexto para hacer preguntas retadoras sobre sus debilidades y fortalezas relativas al puesto."
+
+        sys_prompt = f"{instruccion}\nRESUMEN PREVIO: {summary}\nDATOS CV: {datos_cv}{job_info}"
 
         # Preparar historial para Gemini
         history_to_send = []
@@ -128,7 +143,7 @@ def chat():
             config={
                 'system_instruction': sys_prompt,
                 'temperature': 0.7,
-                'max_output_tokens': 350, # LÍMITE DE TOKENS POR RESPUESTA
+                'max_output_tokens': 1000, # LÍMITE DE TOKENS POR RESPUESTA INCREMENTADO
             },
             history=history_to_send
         )
@@ -167,9 +182,17 @@ def chat():
 def get_report():
     data = request.get_json()
     user_id = data.get('user_id')
+    job_title = data.get('job_title')
+    job_company = data.get('job_company')
+    job_context = data.get('job_context')
+    
     history, _ = get_session_data(user_id)
     
-    prompt = f"Analiza la entrevista {str(history)}. Devuelve JSON: hard_skills, soft_skills, cultural_fit, veredicto."
+    job_info = ""
+    if job_title:
+        job_info = f" para el puesto '{job_title}' en la empresa '{job_company or ''}' con el siguiente contexto del puesto:\n{job_context or ''}\n"
+
+    prompt = f"Analiza la entrevista {str(history)}{job_info}. Devuelve un objeto JSON con las claves: 'hard_skills', 'soft_skills', 'cultural_fit', 'veredicto'. IMPORTANTE: El valor de cada clave debe ser un texto informativo redactado de forma limpia y directa en lenguaje natural profesional. NO utilices corchetes, corchetes cuadrados ('[' o ']'), llaves ni formatos de lista crudos en el texto de los valores. Asegúrate de enfocar la evaluación en cómo el candidato encaja en la oferta de trabajo mencionada."
     try:
         response = client.models.generate_content(model=MODELO_ACTIVO, contents=prompt)
         json_clean = response.text.replace('```json', '').replace('```', '').strip()
